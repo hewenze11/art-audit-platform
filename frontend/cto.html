@@ -97,6 +97,7 @@
   <!-- 顶部 -->
   <div class="flex items-center justify-between mb-6">
     <h1 class="text-2xl font-bold text-red-400">🦞 美术审计平台 <span class="text-sm text-gray-400 font-normal">/ CTO 需求发布</span></h1>
+    <a href="/channels.html" class="btn-ghost text-sm">⚙ 渠道配置</a>
     <a href="/" class="btn-ghost text-sm">主管看板 →</a>
   </div>
 
@@ -287,6 +288,9 @@ function escHtml(s) {
 }
 
 loadProjects();
+
+// 每20秒自动刷新当前项目需求进度
+setInterval(() => { if (currentProjectId) loadRequirements(); }, 20000);
 </script>
 </body>
 </html>

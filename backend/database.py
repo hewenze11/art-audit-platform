@@ -50,6 +50,20 @@ CREATE TABLE IF NOT EXISTS audit_logs (
     note TEXT,
     operated_at DATETIME NOT NULL DEFAULT (datetime('now'))
 );
+
+CREATE TABLE IF NOT EXISTS channels (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    name TEXT NOT NULL UNIQUE,
+    type TEXT NOT NULL CHECK(type IN ('ai_image','ai_audio','asset_library')),
+    provider TEXT NOT NULL,
+    api_url TEXT,
+    api_key TEXT,
+    default_params TEXT,
+    note TEXT,
+    enabled INTEGER NOT NULL DEFAULT 1,
+    created_at DATETIME NOT NULL DEFAULT (datetime('now')),
+    updated_at DATETIME NOT NULL DEFAULT (datetime('now'))
+);
 """
 
 def get_db() -> sqlite3.Connection:

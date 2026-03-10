@@ -1,0 +1,277 @@
+<!DOCTYPE html>
+<html lang="zh">
+<head>
+<meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>素材渠道配置 · 美术审计平台</title>
+<script src="https://cdn.tailwindcss.com"></script>
+<style>
+  body{background:#1a1a2e;color:#eaeaea;font-family:system-ui,sans-serif}
+  .card{background:#16213e;border-radius:12px}
+  input,select,textarea{background:#0d1b2a;border:1px solid #2d3748;color:#eaeaea;border-radius:8px;padding:8px 12px;outline:none;width:100%;box-sizing:border-box}
+  input:focus,select:focus,textarea:focus{border-color:#e94560}
+  .btn-primary{background:#e94560;color:#fff;border:none;border-radius:8px;padding:8px 18px;font-weight:600;cursor:pointer}
+  .btn-primary:hover{background:#c73652}
+  .btn-ghost{background:transparent;border:1px solid #4b5563;color:#9ca3af;border-radius:8px;padding:6px 14px;cursor:pointer;font-size:13px}
+  .btn-ghost:hover{border-color:#e94560;color:#e94560}
+  .btn-save{background:#0f9b58;color:#fff;border:none;border-radius:6px;padding:5px 14px;cursor:pointer;font-size:13px}
+  .btn-save:hover{background:#0a7a45}
+  .tag-ai_image{background:#1e3a5f;color:#93c5fd;padding:2px 10px;border-radius:999px;font-size:11px}
+  .tag-ai_audio{background:#4c1d95;color:#c4b5fd;padding:2px 10px;border-radius:999px;font-size:11px}
+  .tag-asset_library{background:#064e3b;color:#6ee7b7;padding:2px 10px;border-radius:999px;font-size:11px}
+  .drawer{position:fixed;top:0;right:-520px;width:520px;height:100vh;background:#16213e;box-shadow:-4px 0 24px #0007;transition:right .3s;z-index:50;overflow-y:auto;padding:32px}
+  .drawer.open{right:0}
+  .overlay{position:fixed;inset:0;background:#0009;z-index:40;display:none}
+  .overlay.show{display:block}
+  .enabled-dot{width:10px;height:10px;border-radius:50%;display:inline-block}
+  .copy-btn{background:#1f2937;border:none;color:#9ca3af;border-radius:4px;padding:2px 8px;font-size:11px;cursor:pointer}
+  .copy-btn:hover{color:#fff;background:#374151}
+</style>
+</head>
+<body>
+
+<!-- 编辑抽屉 -->
+<div class="overlay" id="overlay" onclick="closeDrawer()"></div>
+<div class="drawer" id="drawer">
+  <div class="flex justify-between items-center mb-6">
+    <h2 class="text-xl font-bold" id="drawerTitle">配置渠道</h2>
+    <button onclick="closeDrawer()" class="text-gray-400 hover:text-white text-2xl">&times;</button>
+  </div>
+  <label class="block text-xs text-gray-400 mb-1">渠道名称 *</label>
+  <input id="dName" type="text" placeholder="如：我的 Stability AI" class="mb-3">
+  <label class="block text-xs text-gray-400 mb-1">类型 *</label>
+  <select id="dType" class="mb-3">
+    <option value="ai_image">🖼 AI 生图接口</option>
+    <option value="ai_audio">🎵 AI 音频接口</option>
+    <option value="asset_library">📦 素材资源库</option>
+  </select>
+  <label class="block text-xs text-gray-400 mb-1">API 地址</label>
+  <input id="dUrl" type="text" placeholder="https://api.example.com/..." class="mb-3">
+  <label class="block text-xs text-gray-400 mb-1">API Key（填写后加密存储，列表页脱敏显示）</label>
+  <input id="dKey" type="password" placeholder="sk-... 或留空" class="mb-3">
+  <label class="block text-xs text-gray-400 mb-1">默认参数（JSON格式，可选）</label>
+  <textarea id="dParams" rows="3" placeholder='{"width":1024,"height":1024}' class="mb-3 font-mono text-xs"></textarea>
+  <label class="block text-xs text-gray-400 mb-1">说明 / 使用指引</label>
+  <textarea id="dNote" rows="4" placeholder="如何获取 Key、费用说明、适用场景..." class="mb-4"></textarea>
+  <div class="flex items-center gap-2 mb-6">
+    <input type="checkbox" id="dEnabled" class="w-4 h-4 accent-green-500">
+    <label for="dEnabled" class="text-sm text-gray-300">启用此渠道</label>
+  </div>
+  <div class="flex gap-3">
+    <button class="btn-ghost flex-1" onclick="closeDrawer()">取消</button>
+    <button class="btn-primary flex-1" onclick="saveChannel()">保存</button>
+  </div>
+</div>
+
+<!-- 主体 -->
+<div class="max-w-6xl mx-auto px-4 py-6">
+  <!-- 顶部 -->
+  <div class="flex items-center justify-between mb-2">
+    <div>
+      <h1 class="text-2xl font-bold text-red-400">🦞 素材渠道配置</h1>
+      <p class="text-gray-500 text-sm mt-1">配置 AI 生图/音频接口和素材资源库，供美术 Agent 生成素材时调用</p>
+    </div>
+    <div class="flex gap-3">
+      <a href="/cto.html" class="btn-ghost">CTO端 →</a>
+      <button class="btn-primary" onclick="openDrawer(null)">+ 新增渠道</button>
+    </div>
+  </div>
+
+  <!-- 说明卡 -->
+  <div class="card p-4 mb-6 border border-yellow-800 bg-yellow-950 bg-opacity-30">
+    <p class="text-yellow-300 text-sm font-semibold mb-1">💡 如何使用</p>
+    <p class="text-yellow-200 text-xs leading-relaxed">
+      配置好渠道并填入 API Key 后，将渠道名称和参数告知美术 Agent（或其他 AI 工具），
+      Agent 即可根据需求的 AI Prompt 调用对应接口自动生成素材并上传到审核平台。
+      <strong>Key 仅加密存于本地服务器，不会外传。</strong>
+    </p>
+  </div>
+
+  <!-- 分类展示 -->
+  <div id="sectionImage" class="mb-8">
+    <h2 class="text-sm font-semibold text-blue-400 uppercase tracking-wider mb-3">🖼 AI 生图接口</h2>
+    <div id="gridImage" class="grid grid-cols-1 md:grid-cols-2 gap-4"></div>
+  </div>
+  <div id="sectionAudio" class="mb-8">
+    <h2 class="text-sm font-semibold text-purple-400 uppercase tracking-wider mb-3">🎵 AI 音频接口</h2>
+    <div id="gridAudio" class="grid grid-cols-1 md:grid-cols-2 gap-4"></div>
+  </div>
+  <div id="sectionLib" class="mb-8">
+    <h2 class="text-sm font-semibold text-green-400 uppercase tracking-wider mb-3">📦 素材资源库</h2>
+    <div id="gridLib" class="grid grid-cols-1 md:grid-cols-2 gap-4"></div>
+  </div>
+</div>
+
+<script>
+const BASE_URL = window.location.origin;
+let ADMIN_TOKEN = localStorage.getItem('ADMIN_TOKEN') || '';
+let editingId = null;
+
+function checkToken() {
+  if (!ADMIN_TOKEN) {
+    const t = prompt('请输入 ADMIN_TOKEN：');
+    if (t) { ADMIN_TOKEN = t; localStorage.setItem('ADMIN_TOKEN', t); }
+  }
+}
+function getHeaders(json=false) {
+  const h = { 'Authorization': 'Bearer ' + ADMIN_TOKEN };
+  if (json) h['Content-Type'] = 'application/json';
+  return h;
+}
+
+async function loadChannels() {
+  checkToken();
+  const res = await fetch(BASE_URL + '/api/channels', { headers: getHeaders() });
+  if (!res.ok) { alert('加载失败，请检查 Token'); return; }
+  const channels = await res.json();
+
+  document.getElementById('gridImage').innerHTML = '';
+  document.getElementById('gridAudio').innerHTML = '';
+  document.getElementById('gridLib').innerHTML = '';
+
+  const typeMap = { ai_image: 'gridImage', ai_audio: 'gridAudio', asset_library: 'gridLib' };
+  channels.forEach(c => {
+    const grid = document.getElementById(typeMap[c.type]);
+    if (grid) grid.appendChild(makeCard(c));
+  });
+}
+
+function makeCard(c) {
+  const enabled = c.enabled === 1;
+  const hasKey = c.api_key_masked && c.api_key_masked !== '****';
+  const typeLabels = { ai_image:'AI 生图', ai_audio:'AI 音频', asset_library:'素材库' };
+  const div = document.createElement('div');
+  div.className = `card p-4 border ${enabled ? 'border-gray-600' : 'border-gray-800 opacity-60'} relative`;
+  div.innerHTML = `
+    <div class="flex items-start justify-between mb-2">
+      <div class="flex items-center gap-2 flex-1 min-w-0">
+        <span class="enabled-dot" style="background:${enabled?'#0f9b58':'#6b7280'}"></span>
+        <span class="font-semibold truncate">${escHtml(c.name)}</span>
+      </div>
+      <span class="tag-${c.type} shrink-0 ml-2">${typeLabels[c.type]||c.type}</span>
+    </div>
+
+    ${c.api_url ? `
+    <div class="flex items-center gap-2 mb-2">
+      <span class="text-xs text-gray-500 font-mono truncate flex-1">${escHtml(c.api_url)}</span>
+      <button class="copy-btn" onclick="copyText('${escHtml(c.api_url)}')">复制</button>
+    </div>` : ''}
+
+    <div class="flex items-center gap-2 mb-3">
+      <span class="text-xs text-gray-500">API Key：</span>
+      ${hasKey
+        ? `<span class="text-xs text-green-400 font-mono">已配置 ${escHtml(c.api_key_masked)}</span>`
+        : `<span class="text-xs text-red-400">⚠ 未配置</span>`
+      }
+    </div>
+
+    ${c.note ? `
+    <details class="mb-3">
+      <summary class="text-xs text-gray-400 cursor-pointer hover:text-gray-200">📖 使用说明 / 如何获取 Key</summary>
+      <p class="text-xs text-gray-300 mt-2 leading-relaxed whitespace-pre-wrap">${escHtml(c.note)}</p>
+    </details>` : ''}
+
+    ${c.default_params ? `
+    <details class="mb-3">
+      <summary class="text-xs text-gray-500 cursor-pointer hover:text-gray-200">⚙ 默认参数</summary>
+      <pre class="text-xs text-gray-400 mt-1 bg-gray-900 rounded p-2 overflow-x-auto">${escHtml(formatJson(c.default_params))}</pre>
+    </details>` : ''}
+
+    <div class="flex gap-2 mt-2">
+      <button class="btn-ghost flex-1" onclick="openDrawer(${c.id})">✏️ 配置 Key</button>
+      <button class="btn-ghost" style="color:#dc2626;border-color:#dc2626" onclick="deleteChannel(${c.id},'${escHtml(c.name)}')">删除</button>
+      <button class="btn-save" onclick="toggleEnabled(${c.id},${c.enabled})">${enabled?'禁用':'启用'}</button>
+    </div>
+  `;
+  return div;
+}
+
+function openDrawer(id) {
+  editingId = id;
+  if (id) {
+    fetch(BASE_URL + '/api/channels', { headers: getHeaders() })
+      .then(r => r.json())
+      .then(channels => {
+        const c = channels.find(x => x.id === id);
+        if (!c) return;
+        document.getElementById('drawerTitle').textContent = '编辑渠道：' + c.name;
+        document.getElementById('dName').value = c.name || '';
+        document.getElementById('dType').value = c.type || 'ai_image';
+        document.getElementById('dUrl').value = c.api_url || '';
+        document.getElementById('dKey').value = '';
+        document.getElementById('dKey').placeholder = c.api_key_masked ? '不修改请留空（当前已配置）' : '填入 API Key';
+        document.getElementById('dParams').value = c.default_params || '';
+        document.getElementById('dNote').value = c.note || '';
+        document.getElementById('dEnabled').checked = c.enabled === 1;
+      });
+  } else {
+    document.getElementById('drawerTitle').textContent = '新增渠道';
+    ['dName','dUrl','dKey','dParams','dNote'].forEach(id => document.getElementById(id).value = '');
+    document.getElementById('dEnabled').checked = true;
+  }
+  document.getElementById('drawer').classList.add('open');
+  document.getElementById('overlay').classList.add('show');
+}
+function closeDrawer() {
+  document.getElementById('drawer').classList.remove('open');
+  document.getElementById('overlay').classList.remove('show');
+}
+
+async function saveChannel() {
+  const name = document.getElementById('dName').value.trim();
+  if (!name) return alert('请填写渠道名称');
+  const body = {
+    name,
+    type: document.getElementById('dType').value,
+    provider: document.getElementById('dType').value,
+    api_url: document.getElementById('dUrl').value.trim() || null,
+    default_params: document.getElementById('dParams').value.trim() || null,
+    note: document.getElementById('dNote').value.trim() || null,
+    enabled: document.getElementById('dEnabled').checked ? 1 : 0,
+  };
+  const keyVal = document.getElementById('dKey').value.trim();
+  if (keyVal) body.api_key = keyVal;
+
+  const url = editingId ? `${BASE_URL}/api/channels/${editingId}` : `${BASE_URL}/api/channels`;
+  const method = editingId ? 'PATCH' : 'POST';
+  const res = await fetch(url, { method, headers: getHeaders(true), body: JSON.stringify(body) });
+  if (res.ok) { closeDrawer(); loadChannels(); }
+  else { const e = await res.json(); alert(e.detail || '保存失败'); }
+}
+
+async function toggleEnabled(id, current) {
+  await fetch(`${BASE_URL}/api/channels/${id}`, {
+    method: 'PATCH',
+    headers: getHeaders(true),
+    body: JSON.stringify({ enabled: current === 1 ? 0 : 1 })
+  });
+  loadChannels();
+}
+
+async function deleteChannel(id, name) {
+  if (!confirm(`确认删除渠道「${name}」？`)) return;
+  await fetch(`${BASE_URL}/api/channels/${id}`, { method: 'DELETE', headers: getHeaders() });
+  loadChannels();
+}
+
+function copyText(text) {
+  navigator.clipboard.writeText(text).then(() => {
+    const t = document.createElement('div');
+    t.className = 'fixed bottom-4 right-4 bg-green-700 text-white px-4 py-2 rounded-lg text-sm z-50';
+    t.textContent = '已复制';
+    document.body.appendChild(t);
+    setTimeout(() => t.remove(), 1500);
+  });
+}
+
+function formatJson(s) {
+  try { return JSON.stringify(JSON.parse(s), null, 2); } catch { return s; }
+}
+function escHtml(s) {
+  return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;').replace(/'/g,'&#39;');
+}
+
+checkToken();
+loadChannels();
+</script>
+</body>
+</html>

@@ -3,7 +3,7 @@ from fastapi import FastAPI, Depends
 from fastapi.staticfiles import StaticFiles
 from backend.database import init_db
 from backend.auth import require_worker
-from backend.routers import projects, requirements, submissions, audit, assets
+from backend.routers import projects, requirements, submissions, audit, assets, channels
 
 DATA_DIR = os.getenv("DATA_DIR", "/data")
 
@@ -58,6 +58,7 @@ app.include_router(requirements.router, prefix="/api")
 app.include_router(submissions.router, prefix="/api")
 app.include_router(audit.router, prefix="/api")
 app.include_router(assets.router, prefix="/api")
+app.include_router(channels.router, prefix="/api")
 
 # 静态文件（最后挂载）
 uploads_dir = os.path.join(DATA_DIR, "uploads")
