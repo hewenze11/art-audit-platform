@@ -1,0 +1,227 @@
+<!DOCTYPE html>
+<html lang="zh">
+<head>
+<meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>美术任务端 · 美术审计平台</title>
+<script src="https://cdn.tailwindcss.com"></script>
+<style>
+  body{background:#1a1a2e;color:#eaeaea;font-family:system-ui,sans-serif}
+  .card{background:#16213e;border-radius:12px}
+  .tag-image{background:#1e40af;color:#93c5fd;padding:2px 10px;border-radius:999px;font-size:11px}
+  .tag-audio{background:#4c1d95;color:#c4b5fd;padding:2px 10px;border-radius:999px;font-size:11px}
+  .btn-upload{background:#e94560;color:#fff;border:none;border-radius:8px;padding:7px 16px;font-weight:600;cursor:pointer;font-size:13px}
+  .btn-upload:hover{background:#c73652}
+  input,textarea{background:#0d1b2a;border:1px solid #2d3748;color:#eaeaea;border-radius:8px;padding:8px 12px;outline:none}
+  input:focus{border-color:#e94560}
+  .drag-over{border:2px dashed #e94560!important;background:#1f1035!important}
+  progress{-webkit-appearance:none;appearance:none;height:6px;border-radius:999px;overflow:hidden;width:100%}
+  progress::-webkit-progress-bar{background:#374151;border-radius:999px}
+  progress::-webkit-progress-value{background:#e94560;border-radius:999px}
+  progress.done::-webkit-progress-value{background:#0f9b58}
+</style>
+</head>
+<body>
+<div class="max-w-3xl mx-auto px-4 py-6">
+  <!-- 顶部 -->
+  <div class="flex items-center justify-between mb-6">
+    <h1 class="text-2xl font-bold text-red-400">🦞 美术任务端</h1>
+    <div class="flex items-center gap-3">
+      <input id="workerName" type="text" placeholder="你的名字" style="width:140px">
+      <button class="btn-upload" onclick="saveName()">保存</button>
+    </div>
+  </div>
+
+  <div id="taskList"></div>
+  <div id="emptyHint" class="text-center text-gray-500 py-20" style="display:none">🎉 暂无待完成任务</div>
+</div>
+
+<script>
+const BASE_URL = window.location.origin;
+let WORKER_TOKEN = localStorage.getItem('WORKER_TOKEN') || '';
+
+function checkToken() {
+  if (!WORKER_TOKEN) {
+    const t = prompt('请输入 WORKER_TOKEN：');
+    if (t) { WORKER_TOKEN = t; localStorage.setItem('WORKER_TOKEN', t); }
+  }
+}
+
+function saveName() {
+  const n = document.getElementById('workerName').value.trim();
+  if (n) { localStorage.setItem('WORKER_NAME', n); showToast('名字已保存'); }
+}
+
+function getWorkerName() { return localStorage.getItem('WORKER_NAME') || ''; }
+
+function getHeaders() { return { 'Authorization': 'Bearer ' + WORKER_TOKEN }; }
+
+async function loadTasks() {
+  checkToken();
+  const res = await fetch(BASE_URL + '/api/tasks', { headers: getHeaders() });
+  if (!res.ok) { alert('Token 错误或无权限'); return; }
+  const groups = await res.json();
+  const list = document.getElementById('taskList');
+  list.innerHTML = '';
+  if (!groups.length) { document.getElementById('emptyHint').style.display='block'; return; }
+  document.getElementById('emptyHint').style.display='none';
+  groups.forEach(g => list.appendChild(makeGroup(g)));
+}
+
+function makeGroup(g) {
+  const div = document.createElement('div');
+  div.className = 'mb-6';
+  div.innerHTML = `
+    <div class="flex items-center gap-2 mb-3 cursor-pointer select-none" onclick="toggleGroup(this)">
+      <span class="text-yellow-400 font-bold text-lg">▼</span>
+      <h2 class="font-bold text-lg">${escHtml(g.project_name)}</h2>
+      <span class="text-gray-500 text-sm">(${g.requirements.length} 个需求)</span>
+    </div>
+    <div class="group-body space-y-3">
+      ${g.requirements.map(r => makeReqCard(r)).join('')}
+    </div>
+  `;
+  return div;
+}
+
+function toggleGroup(header) {
+  const body = header.nextElementSibling;
+  const arrow = header.querySelector('span');
+  const isOpen = body.style.display !== 'none';
+  body.style.display = isOpen ? 'none' : 'block';
+  arrow.textContent = isOpen ? '▶' : '▼';
+}
+
+function makeReqCard(r) {
+  const done = r.quantity_done >= r.quantity_total;
+  const pct = r.quantity_total > 0 ? r.quantity_done / r.quantity_total : 0;
+  return `
+    <div class="card p-4 border border-gray-700" id="req-${r.id}"
+         ondragover="event.preventDefault();this.classList.add('drag-over')"
+         ondragleave="this.classList.remove('drag-over')"
+         ondrop="handleDrop(event,${r.id})">
+      <div class="flex items-start justify-between mb-2">
+        <div>
+          <span class="font-semibold">${escHtml(r.title)}</span>
+          <span class="${r.category==='image'?'tag-image':'tag-audio'} ml-2">${r.category}</span>
+          ${done ? '<span class="ml-2 text-green-400 text-xs">✅ 已完成</span>' : ''}
+        </div>
+        <span class="${done?'text-green-400':'text-gray-400'} text-sm font-mono">${r.quantity_done}/${r.quantity_total}</span>
+      </div>
+      <progress value="${pct}" max="1" class="${done?'done':''} mb-3"></progress>
+      ${r.ai_prompt ? `
+        <div class="bg-gray-900 rounded-lg p-3 mb-3 relative">
+          <div class="text-xs text-gray-500 mb-1">🤖 AI Prompt</div>
+          <p class="text-sm text-gray-300 whitespace-pre-wrap" id="prompt-${r.id}">${escHtml(r.ai_prompt)}</p>
+          <button onclick="copyPrompt(${r.id})" id="copybtn-${r.id}"
+            class="absolute top-2 right-2 text-xs text-gray-500 hover:text-white border border-gray-600 rounded px-2 py-0.5">复制</button>
+        </div>
+      ` : ''}
+      ${done ? '' : `
+        <div>
+          <input type="file" id="file-${r.id}" multiple
+            accept="image/png,image/jpeg,image/webp,audio/mpeg,audio/wav,audio/ogg"
+            style="display:none" onchange="handleFiles(this.files,${r.id})">
+          <button class="btn-upload" onclick="document.getElementById('file-${r.id}').click()">📎 上传文件</button>
+          <span class="text-xs text-gray-500 ml-2">或拖拽文件到此区域</span>
+        </div>
+      `}
+      <div id="log-${r.id}" class="mt-2 space-y-1"></div>
+    </div>
+  `;
+}
+
+function handleDrop(e, reqId) {
+  e.preventDefault();
+  document.getElementById('req-'+reqId).classList.remove('drag-over');
+  handleFiles(e.dataTransfer.files, reqId);
+}
+
+async function handleFiles(files, reqId) {
+  for (const file of files) {
+    await uploadFile(file, reqId);
+  }
+}
+
+async function uploadFile(file, reqId) {
+  const log = document.getElementById('log-' + reqId);
+  const lineId = 'log-' + reqId + '-' + Date.now();
+  const line = document.createElement('div');
+  line.id = lineId;
+  line.className = 'text-xs text-yellow-400';
+  line.textContent = `⏳ ${file.name} 上传中...`;
+  log.appendChild(line);
+
+  const fd = new FormData();
+  fd.append('requirement_id', reqId);
+  fd.append('file', file);
+  const name = getWorkerName();
+  if (name) fd.append('submitted_by', name);
+
+  try {
+    const res = await fetch(BASE_URL + '/api/submissions', {
+      method: 'POST',
+      headers: getHeaders(),
+      body: fd
+    });
+    if (res.ok) {
+      line.className = 'text-xs text-green-400';
+      line.textContent = `✅ ${file.name} 上传成功`;
+      refreshReqProgress(reqId);
+    } else {
+      const e = await res.json();
+      line.className = 'text-xs text-red-400';
+      line.textContent = `❌ ${file.name} 失败：${e.detail || '未知错误'}`;
+    }
+  } catch (err) {
+    line.className = 'text-xs text-red-400';
+    line.textContent = `❌ ${file.name} 网络错误`;
+  }
+}
+
+async function refreshReqProgress(reqId) {
+  // 重新拉任务刷新进度（轻量做法）
+  const res = await fetch(BASE_URL + '/api/tasks', { headers: getHeaders() });
+  const groups = await res.json();
+  for (const g of groups) {
+    const r = g.requirements.find(x => x.id === reqId);
+    if (r) {
+      const card = document.getElementById('req-' + reqId);
+      if (card) {
+        const pct = r.quantity_total > 0 ? r.quantity_done / r.quantity_total : 0;
+        const prog = card.querySelector('progress');
+        if (prog) { prog.value = pct; prog.className = pct>=1?'done mb-3':'mb-3'; }
+        const counter = card.querySelector('.font-mono');
+        if (counter) counter.textContent = `${r.quantity_done}/${r.quantity_total}`;
+      }
+    }
+  }
+}
+
+function copyPrompt(reqId) {
+  const text = document.getElementById('prompt-' + reqId).textContent;
+  navigator.clipboard.writeText(text).then(() => {
+    const btn = document.getElementById('copybtn-' + reqId);
+    btn.textContent = '✓ 已复制';
+    setTimeout(() => btn.textContent = '复制', 2000);
+  });
+}
+
+function showToast(msg) {
+  const t = document.createElement('div');
+  t.className = 'fixed bottom-4 right-4 bg-green-700 text-white px-4 py-2 rounded-lg text-sm';
+  t.textContent = msg;
+  document.body.appendChild(t);
+  setTimeout(() => t.remove(), 2000);
+}
+
+function escHtml(s) {
+  return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;').replace(/'/g,'&#39;');
+}
+
+// 初始化
+document.getElementById('workerName').value = localStorage.getItem('WORKER_NAME') || '';
+checkToken();
+loadTasks();
+</script>
+</body>
+</html>

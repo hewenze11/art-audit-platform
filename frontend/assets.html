@@ -1,0 +1,174 @@
+<!DOCTYPE html>
+<html lang="zh">
+<head>
+<meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>资产调用端 · 美术审计平台</title>
+<script src="https://cdn.tailwindcss.com"></script>
+<style>
+  body{background:#1a1a2e;color:#eaeaea;font-family:system-ui,sans-serif}
+  .card{background:#16213e;border-radius:12px}
+  select{background:#0d1b2a;border:1px solid #2d3748;color:#eaeaea;border-radius:8px;padding:7px 12px;outline:none}
+  select:focus{border-color:#e94560}
+  .btn-primary{background:#e94560;color:#fff;border:none;border-radius:8px;padding:8px 18px;font-weight:600;cursor:pointer}
+  .btn-primary:hover{background:#c73652}
+  .btn-dl{background:#1e3a5f;color:#93c5fd;border:none;border-radius:6px;padding:5px 12px;font-size:12px;cursor:pointer;width:100%;margin-top:8px}
+  .btn-dl:hover{background:#1e40af}
+  .img-thumb{width:100%;height:160px;object-fit:cover;border-radius:8px 8px 0 0;cursor:zoom-in}
+</style>
+</head>
+<body>
+
+<!-- Lightbox -->
+<div id="lightbox" class="fixed inset-0 bg-black bg-opacity-90 items-center justify-center z-50 cursor-zoom-out" style="display:none" onclick="this.style.display='none'">
+  <img id="lightboxImg" src="" style="max-width:90vw;max-height:90vh;border-radius:8px">
+</div>
+
+<div class="max-w-7xl mx-auto px-4 py-6">
+  <!-- 顶部 -->
+  <div class="flex items-center justify-between mb-6 flex-wrap gap-3">
+    <h1 class="text-2xl font-bold text-red-400">🦞 资产调用端</h1>
+    <a href="/" class="text-sm text-gray-400 hover:text-white border border-gray-600 rounded-lg px-3 py-1">主管看板 →</a>
+  </div>
+
+  <!-- 筛选栏 -->
+  <div class="card p-4 mb-6 flex flex-wrap items-center gap-4">
+    <div class="flex items-center gap-2">
+      <label class="text-sm text-gray-400">项目</label>
+      <select id="projectFilter" onchange="loadAssets()">
+        <option value="">全部项目</option>
+      </select>
+    </div>
+    <div class="flex items-center gap-2">
+      <label class="text-sm text-gray-400">类别</label>
+      <select id="categoryFilter" onchange="loadAssets()">
+        <option value="">全部类别</option>
+        <option value="image">image（图片）</option>
+        <option value="audio">audio（音频）</option>
+      </select>
+    </div>
+    <button class="btn-primary" onclick="downloadZip()">📦 批量下载全部 ZIP</button>
+    <span id="assetCount" class="text-gray-400 text-sm ml-auto"></span>
+  </div>
+
+  <!-- 资产网格 -->
+  <div id="assetGrid" class="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-4"></div>
+  <div id="emptyHint" class="text-center text-gray-500 py-20" style="display:none">暂无已通过的资产</div>
+</div>
+
+<script>
+const BASE_URL = window.location.origin;
+let ADMIN_TOKEN = localStorage.getItem('ADMIN_TOKEN') || '';
+
+function checkToken() {
+  if (!ADMIN_TOKEN) {
+    const t = prompt('请输入 ADMIN_TOKEN：');
+    if (t) { ADMIN_TOKEN = t; localStorage.setItem('ADMIN_TOKEN', t); }
+  }
+}
+function getHeaders() { return { 'Authorization': 'Bearer ' + ADMIN_TOKEN }; }
+
+async function loadProjects() {
+  const res = await fetch(BASE_URL + '/api/projects', { headers: getHeaders() });
+  const projects = await res.json();
+  const sel = document.getElementById('projectFilter');
+  projects.forEach(p => {
+    const opt = document.createElement('option');
+    opt.value = p.id; opt.textContent = p.name;
+    sel.appendChild(opt);
+  });
+}
+
+async function loadAssets() {
+  const pid = document.getElementById('projectFilter').value;
+  const cat = document.getElementById('categoryFilter').value;
+  let url = BASE_URL + '/api/assets?';
+  if (pid) url += 'project_id=' + pid + '&';
+  if (cat) url += 'category=' + cat;
+
+  const res = await fetch(url, { headers: getHeaders() });
+  const assets = await res.json();
+
+  const grid = document.getElementById('assetGrid');
+  const empty = document.getElementById('emptyHint');
+  grid.innerHTML = '';
+
+  document.getElementById('assetCount').textContent = `共 ${assets.length} 个资产`;
+
+  if (!assets.length) { empty.style.display='block'; return; }
+  empty.style.display = 'none';
+  assets.forEach(a => grid.appendChild(makeCard(a)));
+}
+
+function makeCard(a) {
+  const isImage = a.mime_type && a.mime_type.startsWith('image/');
+  const size = formatSize(a.file_size);
+  const div = document.createElement('div');
+  div.className = 'card border border-gray-700 overflow-hidden';
+
+  if (isImage) {
+    div.innerHTML = `
+      <img src="${BASE_URL}${a.download_url}" class="img-thumb" onclick="openLightbox('${BASE_URL}${a.download_url}')"
+           onerror="this.style.background='#374151';this.style.height='80px'">
+      <div class="p-2">
+        <p class="text-xs font-medium truncate" title="${escHtml(a.original_filename)}">${escHtml(a.original_filename)}</p>
+        <p class="text-xs text-gray-500 truncate">${escHtml(a.requirement_title)}</p>
+        <p class="text-xs text-gray-600">${size}</p>
+        <a href="${BASE_URL}${a.download_url}" download="${escHtml(a.original_filename)}" class="btn-dl block text-center">⬇ 下载</a>
+      </div>
+    `;
+  } else {
+    div.innerHTML = `
+      <div class="p-3 bg-gray-900">
+        <div class="text-3xl text-center py-4">🎵</div>
+        <audio controls class="w-full" src="${BASE_URL}${a.download_url}"></audio>
+      </div>
+      <div class="p-2">
+        <p class="text-xs font-medium truncate" title="${escHtml(a.original_filename)}">${escHtml(a.original_filename)}</p>
+        <p class="text-xs text-gray-500 truncate">${escHtml(a.requirement_title)}</p>
+        <p class="text-xs text-gray-600">${size}</p>
+        <a href="${BASE_URL}${a.download_url}" download="${escHtml(a.original_filename)}" class="btn-dl block text-center">⬇ 下载</a>
+      </div>
+    `;
+  }
+  return div;
+}
+
+function downloadZip() {
+  const pid = document.getElementById('projectFilter').value;
+  const cat = document.getElementById('categoryFilter').value;
+  let url = BASE_URL + '/api/assets/download-zip?';
+  if (pid) url += 'project_id=' + pid + '&';
+  if (cat) url += 'category=' + cat;
+  // 带 token 的下载方式：通过 fetch 触发
+  fetch(url, { headers: getHeaders() })
+    .then(r => r.blob())
+    .then(blob => {
+      const a = document.createElement('a');
+      a.href = URL.createObjectURL(blob);
+      a.download = 'assets.zip';
+      a.click();
+    });
+}
+
+function openLightbox(src) {
+  document.getElementById('lightboxImg').src = src;
+  document.getElementById('lightbox').style.display = 'flex';
+}
+
+function formatSize(bytes) {
+  if (!bytes) return '';
+  if (bytes < 1024) return bytes + ' B';
+  if (bytes < 1048576) return (bytes/1024).toFixed(1) + ' KB';
+  return (bytes/1048576).toFixed(1) + ' MB';
+}
+
+function escHtml(s) {
+  return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;').replace(/'/g,'&#39;');
+}
+
+checkToken();
+loadProjects();
+loadAssets();
+</script>
+</body>
+</html>

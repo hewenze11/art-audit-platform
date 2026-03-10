@@ -1,0 +1,222 @@
+<!DOCTYPE html>
+<html lang="zh">
+<head>
+<meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>主管审批看板 · 美术审计平台</title>
+<script src="https://cdn.tailwindcss.com"></script>
+<style>
+  body{background:#1a1a2e;color:#eaeaea;font-family:system-ui,sans-serif}
+  .card{background:#16213e;border-radius:12px}
+  .btn-approve{background:#0f9b58;color:#fff;border:none;border-radius:8px;padding:7px 0;font-weight:600;cursor:pointer;flex:1}
+  .btn-approve:hover{background:#0a7a45}
+  .btn-hold{background:#f59e0b;color:#1a1a2e;border:none;border-radius:8px;padding:7px 0;font-weight:600;cursor:pointer;flex:1}
+  .btn-hold:hover{background:#d97706}
+  .btn-delete{background:#dc2626;color:#fff;border:none;border-radius:8px;padding:7px 0;font-weight:600;cursor:pointer;flex:1}
+  .btn-delete:hover{background:#b91c1c}
+  .fade-out{animation:fadeOut .4s forwards}
+  @keyframes fadeOut{to{opacity:0;transform:scale(.95);height:0;margin:0;padding:0;overflow:hidden}}
+  select{background:#0d1b2a;border:1px solid #2d3748;color:#eaeaea;border-radius:8px;padding:6px 12px;outline:none}
+  #lightbox{position:fixed;inset:0;background:#000c;z-index:100;display:none;align-items:center;justify-content:center;cursor:zoom-out}
+  #lightbox img{max-width:90vw;max-height:90vh;border-radius:8px}
+</style>
+</head>
+<body>
+
+<!-- Lightbox -->
+<div id="lightbox" onclick="document.getElementById('lightbox').style.display='none'">
+  <img id="lightboxImg" src="">
+</div>
+
+<!-- 删除确认 Modal -->
+<div id="deleteModal" class="fixed inset-0 bg-black bg-opacity-70 flex items-center justify-center z-50" style="display:none">
+  <div class="card p-8 w-96">
+    <h2 class="text-xl font-bold mb-2 text-red-400">⚠️ 确认物理删除</h2>
+    <p id="deleteMsg" class="text-gray-300 mb-6 text-sm leading-relaxed"></p>
+    <div class="flex gap-3">
+      <button class="flex-1 py-2 rounded-lg border border-gray-600 text-gray-300 hover:border-gray-400" onclick="document.getElementById('deleteModal').style.display='none'">取消</button>
+      <button class="btn-delete flex-none px-6 py-2" style="flex:1" onclick="confirmDelete()">确认删除</button>
+    </div>
+  </div>
+</div>
+
+<!-- 主体 -->
+<div class="max-w-7xl mx-auto px-4 py-6">
+  <!-- 顶部栏 -->
+  <div class="flex flex-wrap items-center justify-between gap-4 mb-6">
+    <h1 class="text-2xl font-bold text-red-400">🦞 主管审批看板</h1>
+    <div class="flex items-center gap-6 flex-wrap">
+      <div class="flex gap-4 text-sm">
+        <span>待审：<strong id="statPending" class="text-yellow-400">0</strong></span>
+        <span>今日通过：<strong id="statApproved" class="text-green-400">0</strong></span>
+        <span>待定：<strong id="statHold" class="text-orange-400">0</strong></span>
+      </div>
+      <select id="projectFilter" onchange="applyFilter()">
+        <option value="">全部项目</option>
+      </select>
+      <a href="/cto.html" class="text-sm text-gray-400 hover:text-white border border-gray-600 rounded-lg px-3 py-1">CTO端 →</a>
+    </div>
+  </div>
+
+  <!-- 卡片区 -->
+  <div id="pendingGrid" class="columns-1 sm:columns-2 lg:columns-3 xl:columns-4 gap-4 space-y-4"></div>
+  <div id="emptyHint" class="text-center text-gray-500 py-20" style="display:none">🎉 暂无待审内容</div>
+
+  <!-- 待定区 -->
+  <div id="holdSection" style="display:none" class="mt-10">
+    <div class="flex items-center gap-3 mb-4">
+      <div class="flex-1 border-t border-yellow-700"></div>
+      <span class="text-yellow-500 text-sm font-semibold">⏸ 待定区</span>
+      <div class="flex-1 border-t border-yellow-700"></div>
+    </div>
+    <div id="holdGrid" class="columns-1 sm:columns-2 lg:columns-3 xl:columns-4 gap-4 space-y-4"></div>
+  </div>
+</div>
+
+<script>
+const BASE_URL = window.location.origin;
+let ADMIN_TOKEN = localStorage.getItem('ADMIN_TOKEN') || '';
+let allCards = [];
+let deleteTarget = null;
+let todayApproved = 0;
+
+function checkToken() {
+  if (!ADMIN_TOKEN) {
+    const t = prompt('请输入 ADMIN_TOKEN：');
+    if (t) { ADMIN_TOKEN = t; localStorage.setItem('ADMIN_TOKEN', t); }
+  }
+}
+
+function getHeaders() {
+  return { 'Authorization': 'Bearer ' + ADMIN_TOKEN };
+}
+
+async function loadProjects() {
+  const res = await fetch(BASE_URL + '/api/projects', { headers: getHeaders() });
+  const projects = await res.json();
+  const sel = document.getElementById('projectFilter');
+  projects.forEach(p => {
+    const opt = document.createElement('option');
+    opt.value = p.name; opt.textContent = p.name;
+    sel.appendChild(opt);
+  });
+}
+
+async function loadPending() {
+  checkToken();
+  const res = await fetch(BASE_URL + '/api/submissions/pending', { headers: getHeaders() });
+  allCards = await res.json();
+  applyFilter();
+}
+
+function applyFilter() {
+  const filter = document.getElementById('projectFilter').value;
+  const filtered = filter ? allCards.filter(c => c.project_name === filter) : allCards;
+  renderCards(filtered);
+}
+
+function renderCards(cards) {
+  const grid = document.getElementById('pendingGrid');
+  grid.innerHTML = '';
+  const empty = document.getElementById('emptyHint');
+  if (cards.length === 0) { empty.style.display='block'; } else { empty.style.display='none'; }
+  cards.forEach(c => grid.appendChild(makeCard(c)));
+  updateStats(cards);
+}
+
+function updateStats(cards) {
+  document.getElementById('statPending').textContent = cards.length;
+  document.getElementById('statApproved').textContent = todayApproved;
+  const holdGrid = document.getElementById('holdGrid');
+  document.getElementById('statHold').textContent = holdGrid.children.length;
+}
+
+function makeCard(c) {
+  const isImage = c.mime_type && c.mime_type.startsWith('image/');
+  const div = document.createElement('div');
+  div.className = 'card p-0 break-inside-avoid mb-4 overflow-hidden border border-gray-700';
+  div.id = 'card-' + c.id;
+
+  const mediaHtml = isImage
+    ? `<img src="${BASE_URL}${c.preview_url}" class="w-full object-cover cursor-zoom-in" style="max-height:280px" onclick="openLightbox('${BASE_URL}${c.preview_url}')" onerror="this.style.display='none'">`
+    : `<div class="p-4 pb-0"><audio controls class="w-full" src="${BASE_URL}${c.preview_url}"></audio></div>`;
+
+  div.innerHTML = `
+    ${mediaHtml}
+    <div class="p-3">
+      <p class="font-medium text-sm truncate mb-1" title="${escHtml(c.original_filename)}">${escHtml(c.original_filename)}</p>
+      <p class="text-xs text-gray-400 truncate mb-0.5">${escHtml(c.requirement_title)} · ${escHtml(c.project_name)}</p>
+      <p class="text-xs text-gray-500">${escHtml(c.submitted_by||'未知')} · ${fmtTime(c.submitted_at)}</p>
+      <div class="flex gap-2 mt-3">
+        <button class="btn-approve text-sm" onclick="doReview(${c.id},'approved')">✅ 通过</button>
+        <button class="btn-hold text-sm" onclick="doReview(${c.id},'on_hold')">⏸ 待定</button>
+        <button class="btn-delete text-sm" onclick="askDelete(${c.id},'${escHtml(c.original_filename)}')">🗑</button>
+      </div>
+    </div>
+  `;
+  return div;
+}
+
+async function doReview(id, action, note) {
+  const res = await fetch(`${BASE_URL}/api/submissions/${id}/review`, {
+    method: 'POST',
+    headers: { ...getHeaders(), 'Content-Type': 'application/json' },
+    body: JSON.stringify({ action, note: note || null })
+  });
+  if (!res.ok) { const e = await res.json(); alert(e.detail || '操作失败'); return; }
+
+  const card = document.getElementById('card-' + id);
+  if (action === 'approved') {
+    todayApproved++;
+    card.classList.add('fade-out');
+    setTimeout(() => { card.remove(); allCards = allCards.filter(c=>c.id!==id); applyFilter(); }, 400);
+  } else if (action === 'on_hold') {
+    card.classList.add('fade-out');
+    setTimeout(() => {
+      card.classList.remove('fade-out');
+      card.style.opacity = '0.7';
+      const holdGrid = document.getElementById('holdGrid');
+      document.getElementById('holdSection').style.display = 'block';
+      holdGrid.appendChild(card);
+      // 替换按钮
+      card.querySelector('.btn-approve').onclick = () => doReview(id,'approved');
+      card.querySelector('.btn-hold').style.display = 'none';
+      allCards = allCards.filter(c=>c.id!==id);
+      applyFilter();
+    }, 400);
+  } else if (action === 'rejected') {
+    card.classList.add('fade-out');
+    setTimeout(() => { card.remove(); allCards = allCards.filter(c=>c.id!==id); applyFilter(); }, 400);
+  }
+}
+
+function askDelete(id, filename) {
+  deleteTarget = id;
+  document.getElementById('deleteMsg').textContent = `确认删除并物理销毁文件「${filename}」？此操作不可恢复，文件将从服务器彻底删除。`;
+  document.getElementById('deleteModal').style.display = 'flex';
+}
+function confirmDelete() {
+  document.getElementById('deleteModal').style.display = 'none';
+  if (deleteTarget) doReview(deleteTarget, 'rejected');
+  deleteTarget = null;
+}
+
+function openLightbox(src) {
+  document.getElementById('lightboxImg').src = src;
+  document.getElementById('lightbox').style.display = 'flex';
+}
+
+function fmtTime(s) {
+  if (!s) return '';
+  const d = new Date(s.replace(' ','T')+'Z');
+  return d.toLocaleString('zh-CN',{month:'2-digit',day:'2-digit',hour:'2-digit',minute:'2-digit'});
+}
+function escHtml(s) {
+  return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;').replace(/'/g,'&#39;');
+}
+
+checkToken();
+loadProjects();
+loadPending();
+</script>
+</body>
+</html>

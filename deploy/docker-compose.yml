@@ -1,0 +1,16 @@
+services:
+  app:
+    image: ghcr.io/hewenze11/art-audit-platform:latest
+    container_name: art-audit-platform
+    restart: unless-stopped
+    ports:
+      - "80:8000"
+    volumes:
+      - ./data:/data
+    env_file:
+      - .env
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3

@@ -1,0 +1,292 @@
+<!DOCTYPE html>
+<html lang="zh">
+<head>
+<meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>CTO 需求发布端 · 美术审计平台</title>
+<script src="https://cdn.tailwindcss.com"></script>
+<style>
+  body{background:#1a1a2e;color:#eaeaea;font-family:system-ui,sans-serif}
+  .card{background:#16213e;border-radius:12px}
+  .btn-primary{background:#e94560;color:#fff;border-radius:8px;padding:8px 18px;font-weight:600;cursor:pointer;border:none}
+  .btn-primary:hover{background:#c73652}
+  .btn-ghost{background:transparent;border:1px solid #e94560;color:#e94560;border-radius:8px;padding:6px 14px;cursor:pointer}
+  .tag-image{background:#1e40af;color:#93c5fd;padding:2px 10px;border-radius:999px;font-size:12px}
+  .tag-audio{background:#4c1d95;color:#c4b5fd;padding:2px 10px;border-radius:999px;font-size:12px}
+  .tag-open{background:#374151;color:#9ca3af;padding:2px 10px;border-radius:999px;font-size:12px}
+  .tag-completed{background:#064e3b;color:#6ee7b7;padding:2px 10px;border-radius:999px;font-size:12px}
+  .tag-archived{background:#1f2937;color:#6b7280;padding:2px 10px;border-radius:999px;font-size:12px}
+  .drawer{position:fixed;top:0;right:-480px;width:480px;height:100vh;background:#16213e;box-shadow:-4px 0 24px #0007;transition:right .3s;z-index:50;overflow-y:auto;padding:32px}
+  .drawer.open{right:0}
+  .overlay{position:fixed;inset:0;background:#0009;z-index:40;display:none}
+  .overlay.show{display:block}
+  input,select,textarea{background:#0d1b2a;border:1px solid #2d3748;color:#eaeaea;border-radius:8px;padding:8px 12px;width:100%;outline:none;box-sizing:border-box}
+  input:focus,select:focus,textarea:focus{border-color:#e94560}
+  .tab{padding:8px 18px;border-radius:8px 8px 0 0;cursor:pointer;font-weight:500;border:none;background:transparent;color:#9ca3af}
+  .tab.active{background:#16213e;color:#eaeaea}
+  progress{-webkit-appearance:none;appearance:none;height:6px;border-radius:999px;overflow:hidden}
+  progress::-webkit-progress-bar{background:#374151;border-radius:999px}
+  progress::-webkit-progress-value{background:#0f9b58;border-radius:999px}
+</style>
+</head>
+<body>
+
+<!-- Token 弹窗 -->
+<div id="tokenModal" class="fixed inset-0 bg-black bg-opacity-80 flex items-center justify-center z-50" style="display:none!important">
+  <div class="card p-8 w-96">
+    <h2 class="text-xl font-bold mb-4">输入 Admin Token</h2>
+    <input id="tokenInput" type="password" placeholder="ADMIN_TOKEN" class="mb-4">
+    <button class="btn-primary w-full" onclick="saveToken()">保存并继续</button>
+  </div>
+</div>
+
+<!-- 新建项目 Modal -->
+<div id="projectModal" class="fixed inset-0 bg-black bg-opacity-70 flex items-center justify-center z-50" style="display:none">
+  <div class="card p-8 w-96">
+    <h2 class="text-xl font-bold mb-4" id="projectModalTitle">新建项目</h2>
+    <label class="block text-sm text-gray-400 mb-1">项目名称</label>
+    <input id="pName" type="text" placeholder="V1.0 初始版" class="mb-3">
+    <label class="block text-sm text-gray-400 mb-1">描述（可选）</label>
+    <textarea id="pDesc" rows="2" placeholder="项目描述..." class="mb-4"></textarea>
+    <div class="flex gap-3">
+      <button class="btn-ghost flex-1" onclick="closeProjectModal()">取消</button>
+      <button class="btn-primary flex-1" onclick="submitProject()">保存</button>
+    </div>
+  </div>
+</div>
+
+<!-- 删除确认 Modal -->
+<div id="deleteModal" class="fixed inset-0 bg-black bg-opacity-70 flex items-center justify-center z-50" style="display:none">
+  <div class="card p-8 w-96">
+    <h2 class="text-xl font-bold mb-2 text-red-400">确认删除</h2>
+    <p id="deleteMsg" class="text-gray-300 mb-6"></p>
+    <div class="flex gap-3">
+      <button class="btn-ghost flex-1" onclick="document.getElementById('deleteModal').style.display='none'">取消</button>
+      <button class="btn-primary flex-1" style="background:#dc2626" onclick="confirmDelete()">确认删除</button>
+    </div>
+  </div>
+</div>
+
+<!-- 侧滑抽屉：新建/编辑需求 -->
+<div class="overlay" id="overlay" onclick="closeDrawer()"></div>
+<div class="drawer" id="drawer">
+  <div class="flex justify-between items-center mb-6">
+    <h2 class="text-xl font-bold" id="drawerTitle">新建需求</h2>
+    <button onclick="closeDrawer()" class="text-gray-400 hover:text-white text-2xl leading-none">&times;</button>
+  </div>
+  <label class="block text-sm text-gray-400 mb-1">需求标题 *</label>
+  <input id="rTitle" type="text" placeholder="如：4×4车子图片" class="mb-3">
+  <label class="block text-sm text-gray-400 mb-1">资源类型 *</label>
+  <select id="rCategory" class="mb-3">
+    <option value="image">image（图片）</option>
+    <option value="audio">audio（音频）</option>
+  </select>
+  <label class="block text-sm text-gray-400 mb-1">需要数量 *</label>
+  <input id="rQty" type="number" min="1" value="1" class="mb-3">
+  <label class="block text-sm text-gray-400 mb-1">补充说明</label>
+  <textarea id="rDesc" rows="2" placeholder="尺寸、风格等..." class="mb-3"></textarea>
+  <label class="block text-sm text-gray-400 mb-1">AI Prompt</label>
+  <textarea id="rPrompt" rows="4" placeholder="给美术的 AI 辅助提示词..." class="mb-6"></textarea>
+  <div class="flex gap-3">
+    <button class="btn-ghost flex-1" onclick="closeDrawer()">取消</button>
+    <button class="btn-primary flex-1" onclick="submitRequirement()">保存</button>
+  </div>
+</div>
+
+<!-- 主体 -->
+<div class="max-w-6xl mx-auto px-4 py-6">
+  <!-- 顶部 -->
+  <div class="flex items-center justify-between mb-6">
+    <h1 class="text-2xl font-bold text-red-400">🦞 美术审计平台 <span class="text-sm text-gray-400 font-normal">/ CTO 需求发布</span></h1>
+    <a href="/" class="btn-ghost text-sm">主管看板 →</a>
+  </div>
+
+  <!-- 项目 Tabs -->
+  <div class="flex items-center gap-1 mb-0 border-b border-gray-700 flex-wrap">
+    <div id="projectTabs" class="flex gap-1 flex-wrap"></div>
+    <button class="tab text-green-400 hover:text-green-300" onclick="openProjectModal(null)">+ 新建项目</button>
+  </div>
+
+  <!-- 需求区 -->
+  <div class="card p-6 rounded-tl-none">
+    <div class="flex justify-between items-center mb-4">
+      <span id="projectDesc" class="text-gray-400 text-sm"></span>
+      <button class="btn-primary text-sm" onclick="openDrawer(null)">+ 新建需求</button>
+    </div>
+    <div id="reqGrid" class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4"></div>
+  </div>
+</div>
+
+<script>
+const BASE_URL = window.location.origin;
+let ADMIN_TOKEN = localStorage.getItem('ADMIN_TOKEN') || '';
+let currentProjectId = null;
+let currentProjectName = '';
+let editingProjectId = null;
+let editingReqId = null;
+let deleteCallback = null;
+
+function getHeaders() {
+  return { 'Authorization': 'Bearer ' + ADMIN_TOKEN, 'Content-Type': 'application/json' };
+}
+
+function checkToken() {
+  if (!ADMIN_TOKEN) {
+    const t = prompt('请输入 ADMIN_TOKEN：');
+    if (t) { ADMIN_TOKEN = t; localStorage.setItem('ADMIN_TOKEN', t); }
+  }
+}
+
+async function loadProjects() {
+  checkToken();
+  const res = await fetch(BASE_URL + '/api/projects', { headers: getHeaders() });
+  const projects = await res.json();
+  const tabs = document.getElementById('projectTabs');
+  tabs.innerHTML = '';
+  projects.forEach(p => {
+    const tab = document.createElement('div');
+    tab.className = 'flex items-center gap-1';
+    tab.innerHTML = `
+      <button class="tab ${p.id===currentProjectId?'active':''}" onclick="selectProject(${p.id},'${escHtml(p.name)}')">${escHtml(p.name)}</button>
+      <button class="text-gray-500 hover:text-yellow-400 text-xs px-1" onclick="openProjectModal(${p.id})" title="重命名">✏️</button>
+    `;
+    tabs.appendChild(tab);
+  });
+  if (!currentProjectId && projects.length > 0) {
+    selectProject(projects[0].id, projects[0].name);
+  } else if (currentProjectId) {
+    loadRequirements();
+  }
+}
+
+function selectProject(id, name) {
+  currentProjectId = id;
+  currentProjectName = name;
+  document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
+  loadProjects();
+  loadRequirements();
+}
+
+async function loadRequirements() {
+  if (!currentProjectId) return;
+  const res = await fetch(`${BASE_URL}/api/projects/${currentProjectId}/requirements`, { headers: getHeaders() });
+  const reqs = await res.json();
+  const grid = document.getElementById('reqGrid');
+  grid.innerHTML = '';
+  reqs.forEach(r => grid.appendChild(makeReqCard(r)));
+}
+
+function makeReqCard(r) {
+  const pct = r.quantity_total > 0 ? r.quantity_done / r.quantity_total : 0;
+  const isComplete = r.quantity_done >= r.quantity_total;
+  const div = document.createElement('div');
+  div.className = 'card p-4 relative border border-gray-700 hover:border-gray-500 transition-colors';
+  div.innerHTML = `
+    <div class="flex justify-between items-start mb-2">
+      <span class="font-semibold text-sm leading-snug flex-1 mr-2">${escHtml(r.title)}</span>
+      <div class="flex gap-1 shrink-0">
+        <button class="text-gray-500 hover:text-yellow-400 text-sm" onclick="openDrawer(${r.id})" title="编辑">✏️</button>
+        <button class="text-gray-500 hover:text-red-400 text-sm" onclick="askDeleteReq(${r.id},'${escHtml(r.title)}')" title="删除">🗑</button>
+      </div>
+    </div>
+    <div class="flex gap-2 mb-3">
+      <span class="${r.category==='image'?'tag-image':'tag-audio'}">${r.category}</span>
+      <span class="tag-${r.status}">${r.status}</span>
+    </div>
+    <div class="flex items-center gap-2 mb-1">
+      <progress value="${pct}" max="1" class="flex-1" style="accent-color:${isComplete?'#0f9b58':'#e94560'}"></progress>
+      <span class="text-xs ${isComplete?'text-green-400':'text-gray-400'}">${r.quantity_done}/${r.quantity_total}</span>
+    </div>
+    ${r.ai_prompt ? `<p class="text-xs text-gray-500 mt-2 line-clamp-2">🤖 ${escHtml(r.ai_prompt)}</p>` : ''}
+  `;
+  return div;
+}
+
+function openProjectModal(id) {
+  editingProjectId = id;
+  document.getElementById('projectModalTitle').textContent = id ? '重命名项目' : '新建项目';
+  document.getElementById('pName').value = '';
+  document.getElementById('pDesc').value = '';
+  document.getElementById('projectModal').style.display = 'flex';
+}
+function closeProjectModal() { document.getElementById('projectModal').style.display = 'none'; }
+
+async function submitProject() {
+  const name = document.getElementById('pName').value.trim();
+  if (!name) return alert('请填写项目名');
+  const body = { name, description: document.getElementById('pDesc').value.trim() || null };
+  const url = editingProjectId ? `${BASE_URL}/api/projects/${editingProjectId}` : `${BASE_URL}/api/projects`;
+  const method = editingProjectId ? 'PATCH' : 'POST';
+  const res = await fetch(url, { method, headers: getHeaders(), body: JSON.stringify(body) });
+  if (res.ok) { closeProjectModal(); loadProjects(); }
+  else { const e = await res.json(); alert(e.detail || '操作失败'); }
+}
+
+function openDrawer(reqId) {
+  editingReqId = reqId;
+  document.getElementById('drawerTitle').textContent = reqId ? '编辑需求' : '新建需求';
+  if (reqId) {
+    fetch(`${BASE_URL}/api/projects/${currentProjectId}/requirements`, { headers: getHeaders() })
+      .then(r => r.json()).then(reqs => {
+        const r = reqs.find(x => x.id === reqId);
+        if (r) {
+          document.getElementById('rTitle').value = r.title || '';
+          document.getElementById('rCategory').value = r.category || 'image';
+          document.getElementById('rQty').value = r.quantity_total || 1;
+          document.getElementById('rDesc').value = r.description || '';
+          document.getElementById('rPrompt').value = r.ai_prompt || '';
+        }
+      });
+  } else {
+    document.getElementById('rTitle').value = '';
+    document.getElementById('rCategory').value = 'image';
+    document.getElementById('rQty').value = 1;
+    document.getElementById('rDesc').value = '';
+    document.getElementById('rPrompt').value = '';
+  }
+  document.getElementById('drawer').classList.add('open');
+  document.getElementById('overlay').classList.add('show');
+}
+function closeDrawer() {
+  document.getElementById('drawer').classList.remove('open');
+  document.getElementById('overlay').classList.remove('show');
+}
+
+async function submitRequirement() {
+  const title = document.getElementById('rTitle').value.trim();
+  if (!title) return alert('请填写需求标题');
+  const body = {
+    title,
+    category: document.getElementById('rCategory').value,
+    quantity_total: parseInt(document.getElementById('rQty').value) || 1,
+    description: document.getElementById('rDesc').value.trim() || null,
+    ai_prompt: document.getElementById('rPrompt').value.trim() || null,
+  };
+  let res;
+  if (editingReqId) {
+    res = await fetch(`${BASE_URL}/api/requirements/${editingReqId}`, { method:'PATCH', headers: getHeaders(), body: JSON.stringify(body) });
+  } else {
+    res = await fetch(`${BASE_URL}/api/projects/${currentProjectId}/requirements`, { method:'POST', headers: getHeaders(), body: JSON.stringify(body) });
+  }
+  if (res.ok) { closeDrawer(); loadRequirements(); }
+  else { const e = await res.json(); alert(e.detail || '操作失败'); }
+}
+
+function askDeleteReq(id, title) {
+  document.getElementById('deleteMsg').textContent = `确认删除需求「${title}」？此操作不可恢复。`;
+  deleteCallback = async () => {
+    const res = await fetch(`${BASE_URL}/api/requirements/${id}`, { method:'DELETE', headers: getHeaders() });
+    if (res.ok) { document.getElementById('deleteModal').style.display='none'; loadRequirements(); }
+    else { const e = await res.json(); alert(e.detail || '删除失败'); }
+  };
+  document.getElementById('deleteModal').style.display = 'flex';
+}
+function confirmDelete() { if (deleteCallback) deleteCallback(); }
+
+function escHtml(s) {
+  return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+}
+
+loadProjects();
+</script>
+</body>
+</html>
