@@ -4,7 +4,7 @@ import uuid
 from fastapi import APIRouter, Depends, HTTPException, UploadFile, File, Form
 from typing import Optional
 from backend.database import get_db
-from backend.auth import require_worker
+from backend.auth import require_worker, require_admin
 
 router = APIRouter(tags=["submissions"])
 
@@ -61,7 +61,7 @@ async def upload_submission(
     return dict(row)
 
 @router.get("/submissions/pending")
-def list_pending(_=Depends(require_worker)):
+def list_pending(_=Depends(require_admin)):
     db = get_db()
     rows = db.execute("""
         SELECT s.*,
